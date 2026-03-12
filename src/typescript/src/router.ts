@@ -204,11 +204,19 @@ ${content}
         await this.vectorDB.isReady();
         logger.info(`vectorDB is ready, collectionId: ${this.vectorDB._collectionId}`);
       }
-      const isReady = await this.nacosClient.isReady();
-      if (!isReady) {
-        throw new McpError(ErrorCode.InternalError, "Nacos client is not ready or not connected, please check the nacos server conifg");
+      let isReady = false;
+      try {
+        isReady = await this.nacosClient.isReady();
+      } catch (error) {
+        console.error('[WARN] Nacos connection failed:', error);
+        logger.warn(`Nacos connection failed: ${error}`);
       }
-      logger.info(`nacosClient is ready: ${isReady}`);
+      if (!isReady) {
+        logger.warn(`Nacos client is not ready or not connected, running in degraded mode. Please check the nacos server config.`);
+        console.error('[WARN] Nacos client not ready, running in degraded mode');
+      } else {
+        logger.info(`nacosClient is ready: ${isReady}`);
+      }
       if (!this.mcpManager) {
         // 初始化核心服务
         this.mcpManager = new McpManager(this.nacosClient, this.vectorDB, 5000);
@@ -228,15 +236,21 @@ ${content}
 
       logger.info(`registerMcpTools`);
       this.registerMcpTools();
+      console.error('[DEBUG] About to connect to transport...');
       if (replaceTransport) {
+        console.error('[DEBUG] Using replace transport');
         this.mcpServer!.connect(replaceTransport);
       } else {
+        console.error('[DEBUG] Creating stdio transport...');
         const transport = new StdioServerTransport();
         logger.info(`transport: ${transport}`);
+        console.error('[DEBUG] Transport created, connecting...');
         await this.mcpServer!.connect(transport);
+        console.error('[DEBUG] Connected successfully');
         logger.info(`mcpServer is connected, transport: ${JSON.stringify(transport)}`);
       }
     } catch (error) {
+      console.error('[ERROR] Error in start method:', error);
       logger.error("Failed to start Nacos MCP Router:", error);
       // throw error;
     }

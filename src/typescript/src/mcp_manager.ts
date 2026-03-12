@@ -70,8 +70,8 @@ export class McpManager {
         );
       }
     } catch (error) {
-      logger.error("Failed to update MCP servers:", error);
-      throw error;
+      logger.warn("Failed to update MCP servers from Nacos, running in degraded mode:", error);
+      // Don't throw error, just log it and continue in degraded mode
     }
   }
 

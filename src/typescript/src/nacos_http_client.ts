@@ -44,6 +44,10 @@ export class NacosHttpClient {
         } else {
           resolve(false);
         }
+      }).catch((error) => {
+        // Connection failed, return false instead of throwing
+        console.error('[NacosHttpClient] Connection failed:', error.message);
+        resolve(false);
       });
     });
   }

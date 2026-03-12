@@ -1,4 +1,3 @@
-import { HierarchicalNSW } from 'hnswlib-node';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -14,8 +13,62 @@ async function getPipeline() {
   return pipeline;
 }
 
+// Simplified VectorDB implementation without hnswlib-node dependency
+class SimpleIndex {
+  private vectors: number[][] = [];
+  private currentCount: number = 0;
+
+  addPoint(vector: number[], label: number): void {
+    this.vectors[label] = vector;
+    this.currentCount = Math.max(this.currentCount, label + 1);
+  }
+
+  getCurrentCount(): number {
+    return this.currentCount;
+  }
+
+  searchKnn(queryVector: number[], k: number): { neighbors: number[], distances: number[] } {
+    const distances = this.vectors.map((vec, idx) => {
+      if (!vec) return { idx, dist: Infinity };
+      // Cosine similarity
+      const dotProduct = queryVector.reduce((sum, val, i) => sum + val * vec[i], 0);
+      const normA = Math.sqrt(queryVector.reduce((sum, val) => sum + val * val, 0));
+      const normB = Math.sqrt(vec.reduce((sum, val) => sum + val * val, 0));
+      const similarity = dotProduct / (normA * normB);
+      return { idx, dist: 1 - similarity };
+    });
+
+    distances.sort((a, b) => a.dist - b.dist);
+    const topK = distances.slice(0, k).filter(d => d.dist !== Infinity);
+    
+    return {
+      neighbors: topK.map(d => d.idx),
+      distances: topK.map(d => d.dist)
+    };
+  }
+
+  initIndex(maxElements: number): void {
+    this.vectors = new Array(maxElements);
+    this.currentCount = 0;
+  }
+
+  writeIndexSync(filePath: string): void {
+    // Simplified: just save count
+    const data = { count: this.currentCount, vectors: this.vectors.slice(0, this.currentCount) };
+    fs.writeFileSync(filePath, JSON.stringify(data));
+  }
+
+  readIndexSync(filePath: string): void {
+    if (fs.existsSync(filePath)) {
+      const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      this.vectors = data.vectors || [];
+      this.currentCount = data.count || 0;
+    }
+  }
+}
+
 export class MemoryVectorDB {
-  private index: HierarchicalNSW;
+  private index: SimpleIndex;
   private metadatas: Metadata[] = [];
   private extractor: any = null;
   private readonly numDimensions: number;
@@ -52,7 +105,7 @@ export class MemoryVectorDB {
       }
     }
 
-    this.index = new HierarchicalNSW(this.spaceType, this.numDimensions);
+    this.index = new SimpleIndex();
 
     if (fs.existsSync(this.indexFile) && fs.existsSync(this.metadataFile)) {
       logger.info(`[MemoryVectorDB] 加载已有索引: ${this.indexFile} 和元数据: ${this.metadataFile}`);
@@ -123,4 +176,4 @@ export class MemoryVectorDB {
   public getCount() {
     return this.index.getCurrentCount();
   }
-} 
+}
